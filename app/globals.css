@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8faf9;
+  --foreground: #17211f;
 }
 
 @theme inline {
@@ -12,15 +12,66 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* =====================================================
+   FORM FIELD
+   Warna teks dibuat jelas di seluruh aplikasi
+   ===================================================== */
+
+input,
+textarea,
+select {
+  color: #17211f;
+  background-color: #ffffff;
+}
+
+/* Placeholder */
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af;
+  opacity: 1;
+}
+
+/* Select option */
+select option {
+  color: #17211f;
+  background-color: #ffffff;
+}
+
+/* Saat field dipilih */
+input:focus,
+textarea:focus,
+select:focus {
+  color: #17211f;
+}
+
+/* Field yang tidak bisa digunakan */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  color: #6b7280;
+  background-color: #f3f4f6;
+}
+
+/* Date picker dan number input */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="number"] {
+  color: #17211f;
+}
+
+/* Password, email, text, dll */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="url"] {
+  color: #17211f;
 }
