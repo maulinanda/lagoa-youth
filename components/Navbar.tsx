@@ -79,9 +79,14 @@ export default function Navbar() {
         {/* Logo desktop */}
         <Link
           href="/"
-          className="hidden shrink-0 py-4 text-lg font-bold text-teal-700 sm:block"
+          className="hidden shrink-0 items-center py-3 sm:flex"
+          aria-label="Lagoa Youth"
         >
-          Lagoa Youth
+          <img
+            src="/logo-lagoa-youth.jpeg"
+            alt="Lagoa Youth"
+            className="h-12 w-12 rounded-xl object-cover"
+          />
         </Link>
 
         {/* Navigation */}
