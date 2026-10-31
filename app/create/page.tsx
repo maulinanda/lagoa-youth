@@ -1,6 +1,7 @@
+
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -12,499 +13,367 @@ type Category = {
 
 const supabase = createClient();
 
+function getTodayDate() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 export default function CreateActivityPage() {
   const router = useRouter();
 
   const [categories, setCategories] = useState<Category[]>([]);
-  const [title, setTitle] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [description, setDescription] = useState("");
-  const [startAt, setStartAt] = useState("");
-  const [endAt, setEndAt] = useState("");
-  const [location, setLocation] = useState("");
-  const [capacity, setCapacity] = useState("");
-
-  const [loadingCategories, setLoadingCategories] =
-    useState(true);
-  const [loading, setLoading] = useState(false);
-
-  const [checkingAuth, setCheckingAuth] = useState(true);
-
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
-  // =========================================================
-  // MINIMUM DATETIME
-  // Digunakan untuk mencegah user memilih waktu yang sudah
-  // lewat pada input datetime-local.
-  // =========================================================
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [location, setLocation] = useState("");
+  const [capacity, setCapacity] = useState("20");
 
-  const nowForInput = new Date();
-
-  nowForInput.setMinutes(
-    nowForInput.getMinutes() -
-      nowForInput.getTimezoneOffset(),
-  );
-
-  const minDateTime = nowForInput
-    .toISOString()
-    .slice(0, 16);
-
-  // =========================================================
-  // INITIALIZE PAGE
-  // =========================================================
+  const [startDate, setStartDate] = useState(getTodayDate());
+  const [startTime, setStartTime] = useState("16:00");
+  const [endDate, setEndDate] = useState(getTodayDate());
+  const [endTime, setEndTime] = useState("18:00");
 
   useEffect(() => {
-    async function initializePage() {
-      setCheckingAuth(true);
+    async function loadCategories() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-      // 1. Cek apakah user sudah login
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data, error: categoryError } = await supabase
+        .from("categories")
+        .select("id, name, icon")
+        .order("id");
+
+      if (categoryError) {
+        console.error(categoryError);
+        setError("Gagal memuat kategori aktivitas.");
+      } else {
+        setCategories((data ?? []) as Category[]);
+      }
+
+      setLoadingCategories(false);
+    }
+
+    loadCategories();
+  }, [router]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+
+    if (!startDate || !startTime || !endDate || !endTime) {
+      setError("Tanggal dan jam mulai serta selesai wajib diisi.");
+      return;
+    }
+
+    // Gabungkan tanggal dan jam untuk validasi serta penyimpanan.
+    // Nilai input dianggap sebagai waktu lokal perangkat pengguna.
+    const startDateTime = new Date(`${startDate}T${startTime}:00`);
+    const endDateTime = new Date(`${endDate}T${endTime}:00`);
+
+    if (
+      Number.isNaN(startDateTime.getTime()) ||
+      Number.isNaN(endDateTime.getTime())
+    ) {
+      setError("Tanggal atau jam tidak valid.");
+      return;
+    }
+
+    if (endDateTime <= startDateTime) {
+      setError("Waktu selesai harus setelah waktu mulai.");
+      return;
+    }
+
+    const parsedCapacity = Number(capacity);
+
+    if (!Number.isInteger(parsedCapacity) || parsedCapacity < 1) {
+      setError("Kapasitas peserta minimal 1 orang.");
+      return;
+    }
+
+    if (!categoryId) {
+      setError("Silakan pilih kategori aktivitas.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
 
-      // 2. Kalau belum login, arahkan ke Login
       if (userError || !user) {
-        router.replace("/login");
+        setError("Sesi login tidak ditemukan. Silakan login kembali.");
         return;
       }
 
-      // 3. Kalau sudah login, ambil kategori
-      const { data, error: categoryError } =
-        await supabase
-          .from("categories")
-          .select("id, name, icon")
-          .order("id");
-
-      if (categoryError) {
-        console.error(categoryError);
-        setError("Gagal memuat kategori.");
-      } else {
-        setCategories(data ?? []);
-      }
-
-      setLoadingCategories(false);
-      setCheckingAuth(false);
-    }
-
-    initializePage();
-  }, [router]);
-
-  // =========================================================
-  // CREATE ACTIVITY
-  // =========================================================
-
-  async function handleCreateActivity(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-
-    setError("");
-    setSuccess("");
-
-    // =======================================================
-    // VALIDASI FIELD WAJIB
-    // =======================================================
-
-    if (
-      !title ||
-      !categoryId ||
-      !startAt ||
-      !endAt ||
-      !location ||
-      !capacity
-    ) {
-      setError(
-        "Mohon lengkapi semua field yang wajib diisi.",
-      );
-      return;
-    }
-
-    // =======================================================
-    // KONVERSI WAKTU
-    // =======================================================
-
-    const startDate = new Date(startAt);
-    const endDate = new Date(endAt);
-    const now = new Date();
-
-    // =======================================================
-    // VALIDASI WAKTU MULAI
-    // =======================================================
-
-    if (startDate < now) {
-      setError(
-        "Waktu mulai tidak boleh berada di masa lalu.",
-      );
-      return;
-    }
-
-    // =======================================================
-    // VALIDASI WAKTU SELESAI
-    // =======================================================
-
-    if (endDate < now) {
-      setError(
-        "Waktu selesai tidak boleh berada di masa lalu.",
-      );
-      return;
-    }
-
-    // =======================================================
-    // VALIDASI URUTAN WAKTU
-    // =======================================================
-
-    if (endDate <= startDate) {
-      setError(
-        "Waktu selesai harus setelah waktu mulai.",
-      );
-      return;
-    }
-
-    // =======================================================
-    // VALIDASI KAPASITAS
-    // =======================================================
-
-    const capacityNumber = Number(capacity);
-
-    if (capacityNumber < 1) {
-      setError(
-        "Kapasitas peserta minimal 1 orang.",
-      );
-      return;
-    }
-
-    setLoading(true);
-
-    // =======================================================
-    // CEK ULANG USER SEBELUM MENYIMPAN
-    // =======================================================
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError(
-        "Sesi login tidak ditemukan. Silakan login kembali.",
-      );
-      setLoading(false);
-      router.replace("/login");
-      return;
-    }
-
-    // =======================================================
-    // SIMPAN AKTIVITAS
-    // =======================================================
-
-    const { error: insertError } =
-      await supabase
+      const { error: insertError } = await supabase
         .from("activities")
         .insert({
           title: title.trim(),
-          description:
-            description.trim() || null,
+          description: description.trim() || null,
           category_id: Number(categoryId),
           organizer_id: user.id,
-          start_at: startDate.toISOString(),
-          end_at: endDate.toISOString(),
+          start_at: startDateTime.toISOString(),
+          end_at: endDateTime.toISOString(),
           location: location.trim(),
-          capacity: capacityNumber,
+          capacity: parsedCapacity,
           status: "published",
         });
 
-    // =======================================================
-    // CEK ERROR INSERT
-    // =======================================================
+      if (insertError) {
+        console.error(insertError);
+        setError(`Gagal membuat aktivitas: ${insertError.message}`);
+        return;
+      }
 
-    if (insertError) {
-      console.error(insertError);
-
-      setError(
-        `Gagal membuat aktivitas: ${insertError.message}`,
-      );
-
-      setLoading(false);
-      return;
+      router.push("/my-activities");
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      setError("Terjadi kesalahan saat membuat aktivitas.");
+    } finally {
+      setSaving(false);
     }
-
-    // =======================================================
-    // BERHASIL
-    // =======================================================
-
-    setSuccess(
-      "Aktivitas berhasil dibuat! 🎉",
-    );
-
-    setLoading(false);
-
-    setTimeout(() => {
-      router.push("/discover");
-    }, 1000);
   }
 
-  // =========================================================
-  // LOADING AUTH
-  // =========================================================
+  const inputClass =
+    "mt-1 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100";
 
-  if (checkingAuth) {
-    return (
-      <main className="min-h-screen bg-[#F8FAF9] px-6 py-16">
-        <div className="mx-auto max-w-2xl">
-          <div className="rounded-2xl bg-white p-8 text-center shadow-sm">
-            <p className="text-gray-500">
-              Memeriksa sesi login...
-            </p>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  // =========================================================
-  // RENDER
-  // =========================================================
+  const labelClass = "block text-sm font-medium text-gray-700";
 
   return (
-    <main className="min-h-screen bg-[#F8FAF9] px-6 py-10 pb-28 sm:px-8 sm:py-16">
+    <main className="min-h-screen bg-gray-50 px-4 py-8">
       <div className="mx-auto max-w-2xl">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="mb-5 text-sm font-medium text-teal-700 hover:text-teal-900"
+        >
+          ← Kembali
+        </button>
 
-        {/* ================================================= */}
-        {/* HEADER */}
-        {/* ================================================= */}
-
-        <div className="mb-8">
-          <p className="text-sm font-semibold uppercase tracking-wide text-teal-700">
-            Lagoa Youth
-          </p>
-
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-900">
+        <div className="rounded-2xl bg-white p-5 shadow-sm sm:p-8">
+          <h1 className="text-2xl font-bold text-gray-900">
             Buat Aktivitas
           </h1>
 
-          <p className="mt-2 text-gray-600">
-            Buat aktivitas dan ajak orang lain untuk bergabung.
+          <p className="mt-2 text-sm text-gray-600">
+            Ajak warga Lagoa untuk berkegiatan bersama.
           </p>
-        </div>
 
-        {/* ================================================= */}
-        {/* FORM */}
-        {/* ================================================= */}
+          <form onSubmit={handleSubmit} className="mt-7 space-y-5">
+            <div>
+              <label htmlFor="title" className={labelClass}>
+                Nama aktivitas *
+              </label>
+              <input
+                id="title"
+                type="text"
+                required
+                maxLength={150}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Contoh: Futsal Lagoa"
+                className={inputClass}
+              />
+            </div>
 
-        <form
-          onSubmit={handleCreateActivity}
-          className="space-y-6 rounded-2xl bg-white p-6 shadow-sm sm:p-8"
-        >
-
-          {/* ================================================= */}
-          {/* JUDUL */}
-          {/* ================================================= */}
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-800">
-              Nama Aktivitas
-            </label>
-
-            <input
-              type="text"
-              value={title}
-              onChange={(event) =>
-                setTitle(event.target.value)
-              }
-              placeholder="Contoh: Futsal Lagoa"
-              className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-            />
-          </div>
-
-          {/* ================================================= */}
-          {/* KATEGORI */}
-          {/* ================================================= */}
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-800">
-              Kategori
-            </label>
-
-            <select
-              value={categoryId}
-              onChange={(event) =>
-                setCategoryId(event.target.value)
-              }
-              disabled={loadingCategories}
-              className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-gray-100 disabled:text-gray-500"
-            >
-              <option value="">
-                {loadingCategories
-                  ? "Memuat kategori..."
-                  : "Pilih kategori"}
-              </option>
-
-              {categories.map((category) => (
-                <option
-                  key={category.id}
-                  value={category.id}
-                >
-                  {category.icon
-                    ? `${category.icon} `
-                    : ""}
-                  {category.name}
+            <div>
+              <label htmlFor="category" className={labelClass}>
+                Kategori *
+              </label>
+              <select
+                id="category"
+                required
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className={inputClass}
+                disabled={loadingCategories}
+              >
+                <option value="">
+                  {loadingCategories
+                    ? "Memuat kategori..."
+                    : "Pilih kategori"}
                 </option>
-              ))}
-            </select>
-          </div>
 
-          {/* ================================================= */}
-          {/* DESKRIPSI */}
-          {/* ================================================= */}
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.icon ? `${category.icon} ` : ""}
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-800">
-              Deskripsi
-            </label>
-
-            <textarea
-              value={description}
-              onChange={(event) =>
-                setDescription(
-                  event.target.value,
-                )
-              }
-              placeholder="Ceritakan sedikit tentang aktivitas ini..."
-              rows={4}
-              className="mt-2 w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-            />
-          </div>
-
-          {/* ================================================= */}
-          {/* WAKTU */}
-          {/* ================================================= */}
-
-          <div className="grid gap-5 sm:grid-cols-2">
-
-            {/* Mulai */}
             <div>
-              <label className="block text-sm font-semibold text-gray-800">
-                Mulai
+              <label htmlFor="description" className={labelClass}>
+                Deskripsi
               </label>
-
-              <input
-                type="datetime-local"
-                value={startAt}
-                min={minDateTime}
-                onChange={(event) =>
-                  setStartAt(
-                    event.target.value,
-                  )
-                }
-                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+              <textarea
+                id="description"
+                rows={4}
+                maxLength={5000}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Jelaskan kegiatan yang akan dilakukan..."
+                className={inputClass}
               />
             </div>
 
-            {/* Selesai */}
             <div>
-              <label className="block text-sm font-semibold text-gray-800">
-                Selesai
+              <label htmlFor="location" className={labelClass}>
+                Lokasi *
               </label>
-
               <input
-                type="datetime-local"
-                value={endAt}
-                min={
-                  startAt || minDateTime
-                }
-                onChange={(event) =>
-                  setEndAt(
-                    event.target.value,
-                  )
-                }
-                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                id="location"
+                type="text"
+                required
+                maxLength={300}
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Contoh: Lapangan Lagoa"
+                className={inputClass}
               />
             </div>
 
-          </div>
-
-          {/* ================================================= */}
-          {/* LOKASI */}
-          {/* ================================================= */}
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-800">
-              Lokasi
-            </label>
-
-            <input
-              type="text"
-              value={location}
-              onChange={(event) =>
-                setLocation(
-                  event.target.value,
-                )
-              }
-              placeholder="Contoh: Lapangan Muncang"
-              className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-            />
-          </div>
-
-          {/* ================================================= */}
-          {/* KAPASITAS */}
-          {/* ================================================= */}
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-800">
-              Kapasitas Peserta
-            </label>
-
-            <input
-              type="number"
-              min="1"
-              value={capacity}
-              onChange={(event) =>
-                setCapacity(
-                  event.target.value,
-                )
-              }
-              placeholder="Contoh: 20"
-              className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-            />
-          </div>
-
-          {/* ================================================= */}
-          {/* ERROR */}
-          {/* ================================================= */}
-
-          {error && (
-            <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
+            <div>
+              <label htmlFor="capacity" className={labelClass}>
+                Kapasitas peserta *
+              </label>
+              <input
+                id="capacity"
+                type="number"
+                required
+                min={1}
+                step={1}
+                value={capacity}
+                onChange={(e) => setCapacity(e.target.value)}
+                className={inputClass}
+              />
             </div>
-          )}
 
-          {/* ================================================= */}
-          {/* SUCCESS */}
-          {/* ================================================= */}
+            <section className="rounded-xl border border-gray-200 p-4">
+              <h2 className="font-semibold text-gray-900">
+                Waktu mulai
+              </h2>
 
-          {success && (
-            <div className="rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700">
-              {success}
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="startDate" className={labelClass}>
+                    Tanggal mulai *
+                  </label>
+                  <input
+                    id="startDate"
+                    type="date"
+                    required
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="startTime" className={labelClass}>
+                    Jam mulai *
+                  </label>
+                  <input
+                    id="startTime"
+                    type="time"
+                    required
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-gray-200 p-4">
+              <h2 className="font-semibold text-gray-900">
+                Waktu selesai
+              </h2>
+
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="endDate" className={labelClass}>
+                    Tanggal selesai *
+                  </label>
+                  <input
+                    id="endDate"
+                    type="date"
+                    required
+                    min={startDate}
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="endTime" className={labelClass}>
+                    Jam selesai *
+                  </label>
+                  <input
+                    id="endTime"
+                    type="time"
+                    required
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <p className="mt-3 text-xs text-gray-500">
+                Aktivitas boleh selesai pada hari yang berbeda.
+                Pastikan waktu selesai setelah waktu mulai.
+              </p>
+            </section>
+
+            {error && (
+              <div
+                role="alert"
+                className="rounded-xl bg-red-50 p-3 text-sm text-red-700"
+              >
+                {error}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="w-full rounded-xl border border-gray-300 px-5 py-3 font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                Batal
+              </button>
+
+              <button
+                type="submit"
+                disabled={saving || loadingCategories}
+                className="w-full rounded-xl bg-teal-700 px-5 py-3 font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? "Menyimpan..." : "Buat Aktivitas"}
+              </button>
             </div>
-          )}
-
-          {/* ================================================= */}
-          {/* SUBMIT */}
-          {/* ================================================= */}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl bg-teal-700 px-6 py-3 font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading
-              ? "Membuat Aktivitas..."
-              : "Buat Aktivitas"}
-          </button>
-
-        </form>
+          </form>
+        </div>
       </div>
     </main>
   );

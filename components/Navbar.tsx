@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -41,6 +42,8 @@ export default function Navbar() {
     pathname === "/create" ||
     pathname === "/my-activities" ||
     pathname === "/profile" ||
+    pathname === "/information" ||
+    pathname.startsWith("/information/") ||
     pathname.startsWith("/activity/");
 
   if (!isAppPage || checkingAuth) {
@@ -52,6 +55,11 @@ export default function Navbar() {
       href: "/discover",
       label: "Discover",
       icon: "🔎",
+    },
+    {
+      href: "/information",
+      label: "Informasi",
+      icon: "📢",
     },
     {
       href: loggedIn ? "/create" : "/login",

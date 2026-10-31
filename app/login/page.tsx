@@ -1,3 +1,4 @@
+
 "use client";
 
 import { FormEvent, useState } from "react";
@@ -57,9 +58,7 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-[#F8FAF9] px-6 py-10 sm:px-8 sm:py-16">
       <div className="mx-auto flex min-h-[80vh] max-w-md items-center justify-center">
-
         <div className="w-full">
-
           {/* Header */}
           <div className="text-center">
             <Link
@@ -83,7 +82,6 @@ export default function LoginPage() {
             onSubmit={handleLogin}
             className="mt-8 rounded-2xl bg-white p-6 shadow-sm sm:p-8"
           >
-
             {/* Email */}
             <div>
               <label
@@ -128,6 +126,15 @@ export default function LoginPage() {
                 required
                 className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
               />
+
+              <div className="mt-2 text-right">
+                <Link
+                  href="/forgot-password"
+                  className="text-sm font-semibold text-teal-700 hover:text-teal-800"
+                >
+                  Lupa Password?
+                </Link>
+              </div>
             </div>
 
             {/* Error */}
@@ -166,7 +173,6 @@ export default function LoginPage() {
                 Daftar sekarang →
               </Link>
             </div>
-
           </form>
 
           {/* Back to Landing */}
@@ -178,7 +184,6 @@ export default function LoginPage() {
               ← Kembali ke Lagoa Youth
             </Link>
           </div>
-
         </div>
       </div>
     </main>

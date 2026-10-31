@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -133,6 +134,15 @@ export default function Home() {
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">
+
+            {/* Navigasi Informasi */}
+            <Link
+              href="/information"
+              className="rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 transition hover:bg-teal-50 sm:px-4"
+            >
+              Informasi
+            </Link>
+
             <Link
               href="/login"
               className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
@@ -146,6 +156,7 @@ export default function Home() {
             >
               Daftar
             </Link>
+
           </div>
 
         </div>
